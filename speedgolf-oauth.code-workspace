@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"textmarker.savedHighlights": [
+			{
+				"pattern": {
+					"type": "string",
+					"expression": "alias /var/app/current/client/build/static;",
+					"ignoreCase": false,
+					"wholeMatch": false
+				},
+				"color": "yellow"
+			},
+			{
+				"pattern": {
+					"type": "string",
+					"expression": "upstream nodejs {\r\n        server 127.0.0.1:30000;\r\n        keepalive 256;",
+					"ignoreCase": false,
+					"wholeMatch": false
+				},
+				"color": "yellow"
+			}
+		]
+	}
+}

@@ -1,0 +1,20 @@
+branch-defaults:
+  master:
+    environment: OauthDemo-env
+environment-defaults:
+  OauthDemo-env:
+    branch: null
+    repository: null
+global:
+  application_name: OAuth-Demo
+  default_ec2_keyname: null
+  default_platform: arn:aws:elasticbeanstalk:us-west-2::platform/Node.js running on
+    64bit Amazon Linux/4.13.0
+  default_region: us-west-2
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: eb-cli
+  sc: git
+  workspace_type: Application
