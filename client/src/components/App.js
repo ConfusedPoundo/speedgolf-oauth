@@ -31,8 +31,10 @@ class App extends React.Component {
     super(props);
     this.state = {mode: AppMode.LOGIN,
                   menuOpen: false,
-                  userId: "",
-                  showAbout: false};
+                  user: "",
+                  showAbout: false,
+                  authenticated: false,
+                  };
   }
 
   handleChangeMode = (newMode) => {
@@ -51,15 +53,58 @@ class App extends React.Component {
     this.setState(prevState => ({menuOpen: !prevState.menuOpen}));
   }
 
-  setUserId = (Id) => {
-    this.setState({userId: Id});
+  //Set the User Id object, which contains the following props:
+  //id, username, provider, profileImageUrl
+  setUser = (userObj) => {
+    this.setState({user: userObj});
   }
 
-  //When App component mounts, add a window-level click handler to close the
-  //side menu if it is open. This event should fire only if no other lower-level
-  //events intercept the click.
+  //setAuthenticated -- Given auth (true or false), update authentication state.
+  setAuthenticated = (auth) => {
+    this.setState({authenticated: auth});
+  }
+
+
+  //componentDidMount -- Add a window-level click handler to close the
+  //side menu if it is open. In addition, if we are using a non-local auth
+  //strategy, we need to check if we're authenticated and set the mode var appropriately.
   componentDidMount() {
     window.addEventListener("click",this.handleClick);
+    if (!this.state.authenticated) { 
+      //Use /auth/test route to re-test authentication and obtain user data
+      fetch("/auth/test")
+        .then((response) => response.json())
+        .then((obj) => {
+          if (obj.isAuthenticated) {
+            let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
+            if (data == null) {
+              data = {}; //create empty database (localStorage)
+            }
+            if (!data.hasOwnProperty(obj.user.id)) {
+              //create new user with this id in database (localStorage)
+              data[obj.user.id] = {
+                accountInfo: {
+                  provider: obj.user.provider,
+                  password: '',
+                  securityQuestion: '',
+                  securityAnswer: ''
+                },
+                rounds: {}, 
+                roundCount: 0
+              };
+              //Commit to localStorage:
+              localStorage.setItem("speedgolfUserData",JSON.stringify(data));
+            } 
+            //Update current user
+            this.setState({
+              authenticated: true,
+              user: obj.user,
+              mode: AppMode.FEED //We're authenticated so can get into the app.
+            });
+          }
+        }
+      )
+    } 
   }
 
 //We remove the event listener when the component
@@ -150,7 +195,7 @@ componentWillUnmount() {
           mode={this.state.mode}
           menuOpen={this.state.menuOpen}
           changeMode={this.handleChangeMode}
-          userId={this.state.userId}
+          user={this.state.user}
           showAbout={this.toggleAbout}/>
         <ModeBar 
           mode={this.state.mode} 
@@ -159,8 +204,9 @@ componentWillUnmount() {
         <ModePage menuOpen={this.state.menuOpen}
           mode={this.state.mode} 
           changeMode={this.handleChangeMode}
-          userId={this.state.userId}
-          setUserId={this.setUserId}/>
+          setAuthenticated={this.setAuthenticated}
+          user={this.state.user}
+          setUser={this.setUser}/>
         {this.state.showAbout ? this.renderAbout() : null}
       </div>
       );  

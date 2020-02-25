@@ -1,4 +1,4 @@
-//Rounds -- A parent component for the app's "rounds" mode.sidemenu-userID
+//Rounds -- A parent component for the app's "rounds" mode.sidemenu-user
 //Manages the rounds data for the current user and conditionally renders the
 //appropriate rounds mode page based on App's mode, which is passed in as a
 //prop.
@@ -15,8 +15,8 @@ class Rounds extends React.Component {
     constructor(props) {
           super(props);
           let data = JSON.parse(localStorage.getItem("speedgolfUserData")); 
-          this.state = {rounds: data[this.props.userId].rounds,
-                        roundCount: data[this.props.userId].roundCount,
+          this.state = {rounds: data[this.props.user.id].rounds,
+                        roundCount: data[this.props.user.id].roundCount,
                         deleteId: "",
                         editId: ""};          
     }
@@ -42,7 +42,7 @@ class Rounds extends React.Component {
         let data = JSON.parse(localStorage.getItem("speedgolfUserData")); 
         let newRounds = this.state.rounds;
         newRounds[this.state.editId] = newData;
-        data[this.props.userId].rounds = newRounds;
+        data[this.props.user.id].rounds = newRounds;
         localStorage.setItem("speedgolfUserData",JSON.stringify(data));
         this.setState({rounds: newRounds, editId: ""});
         this.props.changeMode(AppMode.ROUNDS);
@@ -54,7 +54,7 @@ class Rounds extends React.Component {
         let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
         let newRounds = this.state.rounds;
         delete newRounds[this.state.deleteId];
-        data[this.props.userId].rounds = newRounds;
+        data[this.props.user.id].rounds = newRounds;
         localStorage.setItem("speedgolfUserData",JSON.stringify(data));
         this.setState({rounds: newRounds, deleteId: ""});
     }
@@ -67,8 +67,8 @@ class Rounds extends React.Component {
         let newRounds = this.state.rounds;
         newData.roundNum = this.state.roundCount + 1;
         newRounds[this.state.roundCount + 1] = newData;
-        data[this.props.userId].rounds = newRounds;
-        data[this.props.userId].roundCount = this.state.roundCount + 1;
+        data[this.props.user.id].rounds = newRounds;
+        data[this.props.user.id].roundCount = this.state.roundCount + 1;
         localStorage.setItem("speedgolfUserData",JSON.stringify(data));
         this.setState({rounds: newRounds, roundCount: newData.roundNum});
         this.props.changeMode(AppMode.ROUNDS);

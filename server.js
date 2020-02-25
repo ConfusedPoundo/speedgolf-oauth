@@ -44,7 +44,7 @@ const PORT = process.env.HTTP_PORT || LOCAL_PORT;
 import express from 'express';
 const app = express();
 app
-  .use(session({secret: "speedgolf"}))
+  .use(session({secret: "speedgolf", cookie: {maxAge: 1000 * 60}}))
   .use(passport.initialize())
   .use(passport.session())
   .use(express.static(path.join(__dirname,"client/build")))
@@ -57,13 +57,17 @@ app
 //AUTHENTICATE route: Uses passport to authenticate with GitHub.
 //Should be accessed when user clicks on 'Login with GitHub' button on 
 //Log In page.
-app.get('/auth/github', passport.authenticate('github'));
+app.get('/auth/github', passport.authenticate('github'),
+  (req, res) => {
+  console.log("/auth/github reached.");
+});
 
 //CALLBACK route:  GitHub will call this route after the
 //OAuth authentication process is complete.
 //req.isAuthenticated() tells us whether authentication was successful.
 app.get('/auth/github/callback', passport.authenticate('github', { failureRedirect: '/' }),
   (req, res) => {
+    console.log("auth/github/callback reached.")
     res.redirect('/'); //sends user back to login screen; req.isAuthenticated() indicates status
   }
 );
@@ -71,7 +75,7 @@ app.get('/auth/github/callback', passport.authenticate('github', { failureRedire
 //LOGOUT route: Use passport's req.logout() method to log the user out and
 //redirect the user to the main app page. req.isAuthenticated() is toggled to false.
 app.get('/auth/logout', (req, res) => {
-    console.log('logging out');
+    console.log('/auth/logout reached. Logging out');
     req.logout();
     res.redirect('/');
 });
@@ -79,7 +83,7 @@ app.get('/auth/logout', (req, res) => {
 //AUTH TEST route: Tests whether user was successfully authenticated.
 //Should be called from the React.js client to set up app state.
 app.get('/auth/test', (req, res) => {
-    console.log("auth/test route invoked.");
+    console.log("auth/test reached.");
     let userObject = {};
     const isAuth = req.isAuthenticated();
     if (isAuth) {

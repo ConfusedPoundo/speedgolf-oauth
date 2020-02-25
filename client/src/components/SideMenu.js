@@ -49,8 +49,8 @@ class SideMenu extends React.Component {
         (this.props.menuOpen ? "sidemenu-open" : "sidemenu-closed")} >
           {/* SIDE MENU TITLE */}
           <div className="sidemenu-title">
-            <img src='http://tiny.cc/chrisprofilepic' height='50' width='50' />
-            <span className="sidemenu-userID">&nbsp;{this.props.userId}</span>
+            <img src={this.props.user.profileImageUrl} height='50' width='50' />
+            <span className="sidemenu-userID">&nbsp;{this.props.user.username}</span>
           </div>
           {/* MENU CONTENT */}
           {/*Mode-based menu items */}

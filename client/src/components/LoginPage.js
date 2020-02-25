@@ -1,5 +1,6 @@
 import React from 'react';
 import AppMode from "./../AppMode.js";
+import md5 from '../md5.js';
 
 class LoginPage extends React.Component {
 
@@ -16,6 +17,8 @@ class LoginPage extends React.Component {
         this.resetPasswordRepeatRef = React.createRef();
         this.state = {loginBtnIcon: "fa fa-sign-in",
                       loginBtnLabel: "Log In",
+                      githubIcon: "fa fa-github",
+                      githubLabel: "Sign in with GitHub",
                       showAccountDialog: false,
                       showLookUpAccountDialog: false,
                       showSecurityQuestionDialog: false,
@@ -27,7 +30,8 @@ class LoginPage extends React.Component {
                       accountPassword: "",
                       accountPasswordRepeat: "",
                       accountSecurityQuestion: "",
-                      accountSecurityAnswer: ""};
+                      accountSecurityAnswer: "",
+                     };
     }
 
 //Focus cursor in email input field when mounted
@@ -37,11 +41,20 @@ class LoginPage extends React.Component {
 
 //handleLogin -- Callback function that sets up initial app state upon login.
 handleLogin = () => {
-    //Stop spinner
+    //Stop spinner and set authStrategy to local
     this.setState({loginBtnIcon: "fa fa-sign-in",
-                loginBtnLabel: "Log In"});
-    //Set current user
-    this.props.setUserId(this.emailInputRef.current.value);
+                   loginBtnLabel: "Log In"});
+    //Set current user in parent component
+    //With local authentication all we have is an email
+    //address; we do not have additional info
+    //We'll grab profile pic from the gravatar service. User can create account
+    //at http://gravatar.com and define their profile pic.
+    this.props.setUser({id: this.emailInputRef.current.value,
+        username:  this.emailInputRef.current.value,
+        provider: "local",
+        profileImageUrl: `https://www.gravatar.com/avatar/${md5(this.emailInputRef.current.value)}`});
+    //Set authenticated state in parent component
+    this.props.setAuthenticated(true);
     //Trigger switch to FEED mode (default app landing page)
     this.props.changeMode(AppMode.FEED);
 }
@@ -51,9 +64,24 @@ handleLogin = () => {
 handleLoginSubmit = (event) => {
     event.preventDefault();
     this.setState({loginBtnIcon: "fa fa-spin fa-spinner",
-                    loginBtnLabel: "Logging In..."});
+                   loginBtnLabel: "Logging In..."});
     //Initiate spinner for 1 second
     setTimeout(this.handleLogin,1000);
+}
+
+//handleOAuthLogin -- Callback function that initiates contact with OAuth
+//provider
+handleOAuthLogin = (provider) => {
+    window.open(`/auth/${provider}`,"_self");
+}
+
+//handleOAuthLoginClick -- Called whent the user clicks on button to
+//authenticate via a third-party OAuth service. The name of the provider is
+//passed in as a parameter.
+handleOAuthLoginClick = (provider) => {
+   this.setState({[provider + "Icon"] : "fa fa-spin fa-spinner",
+                  [provider + "Label"] : "Connecting..."});
+   setTimeout(() => this.handleOAuthLogin(provider),1000);
 }
 
 //checkAccountValidity -- Callback function invoked after a form element in
@@ -99,6 +127,7 @@ handleCreateAccount = (event) => {
     }
     data[this.state.accountName] = {
         accountInfo: {
+        provider: "local",
         password: this.state.accountPassword,
         securityQuestion: this.state.accountSecurityQuestion,
         securityAnswer: this.state.accountSecurityAnswer
@@ -109,7 +138,10 @@ handleCreateAccount = (event) => {
     //Commit to localStorage:
     localStorage.setItem("speedgolfUserData",JSON.stringify(data));
     //Set current user
-    this.props.setUserId(this.state.accountName);
+    this.props.setUser({id: this.state.accountName,
+                        username: this.state.accountName,
+                        provider: "local",
+                        profileImageUrl: `https://www.gravatar.com/avatar/${md5(this.state.accountName)}`} );
     //Log in user by switching to FEED mode
     this.props.changeMode(AppMode.FEED);
 }
@@ -144,7 +176,7 @@ handleLoginChange = (event) => {
               <div className="modal-header">
                 <h3 className="modal-title"><b>Create New Account</b>
                   <button className="close-modal-button" 
-                    onClick={() => {this.setState({showLookUpAccountDialog: false})}}>
+                    onClick={() => {this.setState({showAccountDialog: false})}}>
                     &times;</button>
                 </h3>
               </div>
@@ -377,7 +409,10 @@ handleResetPassword = (event) => {
         let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
         data[this.state.resetEmail].accountInfo.password = this.resetPasswordRef.current.value;
         localStorage.setItem("speedgolfUserData",JSON.stringify(data));
-        this.props.setUserId(this.state.resetEmail);
+        this.props.setUser({id: this.state.resetEmail,
+                            username: this.state.resetEmail,
+                            provider: "local",
+                            profileImageUrl: `https://www.gravatar.com/avatar/${md5(this.state.resetEmail)}`});
         this.props.changeMode(AppMode.FEED);
         this.setState({resetEmail: "", 
                        resetQuestion: "",
@@ -478,7 +513,11 @@ render() {
            <button type="button" className="btn btn-link login-link"
              onClick={() => {this.setState({showLookUpAccountDialog: true});}}>Reset your password</button>
         </p>
-        
+        <p></p>
+            <button type="button" className="btn btn-github"
+               onClick={() => this.handleOAuthLoginClick("github")}>
+              <span className={this.state.githubIcon}></span>&nbsp;{this.state.githubLabel}
+            </button>
         <p></p>
         <p>
             <i>Version CptS 489 Sp20 React Oauth with GitHub</i>
