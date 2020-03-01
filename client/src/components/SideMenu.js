@@ -50,7 +50,7 @@ class SideMenu extends React.Component {
           {/* SIDE MENU TITLE */}
           <div className="sidemenu-title">
             <img src={this.props.user.profileImageUrl} height='50' width='50' />
-            <span className="sidemenu-userID">&nbsp;{this.props.user.username}</span>
+            <span className="sidemenu-userID">&nbsp;{this.props.user.displayName}</span>
           </div>
           {/* MENU CONTENT */}
           {/*Mode-based menu items */}
