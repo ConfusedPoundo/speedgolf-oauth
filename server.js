@@ -17,37 +17,53 @@ passport.use(new GithubStrategy({
     callbackURL: DEPLOY_URL + "/auth/github/callback"
   },
   function(accessToken, refreshToken, profile, done) {
+    //TO DO: Check whether user is in app database and if not, add to database.
     return done(null, profile);
   }
 ));
 
 //Serialize the current user to the session
-passport.serializeUser(function(user, done) {
-  // TO DO: Add custom serialization if desired
-  done(null, user);
+passport.serializeUser((user, done) => {
+  console.log("In serializeUser.");
+  //Note: The code below is just for this demo, which is not using a back-end
+  //database. When we have back-end database, we would put user info into the
+  //database in the callback above and only serialize the unique user id into
+  //the session.
+  let userObject = {
+    id: user.username + "@github",
+    username : user.username,
+    provider : user.provider,
+    profileImageUrl : user.photos[0].value
+  };
+  done(null, userObject);
 });
 
 //Deserialize the current user from the session
 //to persistent storage.
-passport.deserializeUser(function(user, done) {
-  //TO DO: Add custom deserialization if desired
+passport.deserializeUser((user, done) => {
+  console.log("In deserializeUser.");
+  //TO DO: Look up the user in the database and attach their data record to
+  //req.user. For the purposes of this demo, the user record received as a param 
+  //is just being passed through, without any database lookup.
   done(null, user);
 });
-
-import session from 'express-session';
-import path from 'path';
 
 ////////////////////
 //EXPRESS APP SET-UP
 ///////////////////
+import session from 'express-session';
+import path from 'path';
 const PORT = process.env.HTTP_PORT || LOCAL_PORT;
 import express from 'express';
 const app = express();
 app
-  .use(session({secret: "speedgolf", cookie: {maxAge: 1000 * 60}}))
+  .use(session({secret: "speedgolf", 
+                resave: false,
+                saveUninitialized: false,
+                cookie: {maxAge: 1000 * 60}}))
+  .use(express.static(path.join(__dirname,"client/build")))
   .use(passport.initialize())
   .use(passport.session())
-  .use(express.static(path.join(__dirname,"client/build")))
   .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
 /////////////////////
@@ -57,10 +73,7 @@ app
 //AUTHENTICATE route: Uses passport to authenticate with GitHub.
 //Should be accessed when user clicks on 'Login with GitHub' button on 
 //Log In page.
-app.get('/auth/github', passport.authenticate('github'),
-  (req, res) => {
-  console.log("/auth/github reached.");
-});
+app.get('/auth/github', passport.authenticate('github'));
 
 //CALLBACK route:  GitHub will call this route after the
 //OAuth authentication process is complete.
@@ -84,19 +97,14 @@ app.get('/auth/logout', (req, res) => {
 //Should be called from the React.js client to set up app state.
 app.get('/auth/test', (req, res) => {
     console.log("auth/test reached.");
-    let userObject = {};
     const isAuth = req.isAuthenticated();
     if (isAuth) {
-        //populate 'user' property, which must exist since isAuth===true
         console.log("User is authenticated");
-        userObject.id = req.user.username + "@github";
-        userObject.username = req.user.username;
-        userObject.provider = "github";
-        userObject.profileImageUrl = req.user.photos[0].value;
+        console.log("User record tied to session: " + JSON.stringify(req.user));
     } else {
-        //Keep 'user' property empty: 'user' prop does not exist
+        //User is not authenticated.
         console.log("User is not authenticated");
     }
     //Return JSON object to client with results.
-    res.json({isAuthenticated: isAuth, user: userObject});
+    res.json({isAuthenticated: isAuth, user: req.user});
 });
