@@ -3,9 +3,42 @@
 //Uses ES6 syntax! We transpile it using Babel. Please see this tutorial:
 //https://medium.com/@wlto/how-to-deploy-an-express-application-with-react-front-end-on-aws-elastic-beanstalk-880ff7245008
 
-/////////////////
-//PASSPORT SET-UP
-/////////////////
+///////////////////
+//MONGOOSE SET-UP//
+///////////////////
+import mongoose from 'mongoose';
+const connectStr = 'mongodb://localhost/appdb';
+
+//Open connection to database
+mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
+  .then(
+    () =>  {console.log(`Connected to ${connectStr}.`)},
+    err => {console.error(`Error connecting to ${connectStr}: ${err}`)}
+  );
+
+//Define schema that maps to a document in the Users collection in the appdb
+//database.  See https://mongoosejs.com/docs/guide.html
+const Schema = mongoose.Schema;
+const userSchema = new Schema({
+  id: String, //unique identifier for user
+  displayName: String, //Name to be displayed within app
+  authStrategy: String, //strategy used to authenticate, e.g., github, local
+  profileImageUrl: String //link to profile image
+});
+
+//Convert schema to model
+const User = mongoose.model("User",userSchema); 
+//We can use User to read from and write to the 'users' collection of the appdb
+//This is by convention. From https://mongoosejs.com/docs/models.html:
+//When creating a model from a schema, "Mongoose automatically looks for the 
+//plural, lowercased version of your model name [in the first paramater]." 
+//It then writes to that collection in the database to which you are connected.
+//If that collection does not yet exist, it is automatically created when the
+//first document is written!
+
+///////////////////
+//PASSPORT SET-UP//
+///////////////////
 const LOCAL_PORT = 4001;
 const DEPLOY_URL = "http://localhost:" + LOCAL_PORT;
 import passport from 'passport';
@@ -16,8 +49,7 @@ passport.use(new GithubStrategy({
     clientSecret: "1e54162ecb7230eca9d26cc6484636e561e4d838",
     callbackURL: DEPLOY_URL + "/auth/github/callback"
   },
-  function(accessToken, refreshToken, profile, done) {
-    //TO DO: Check whether user is in app database and if not, add to database.
+  (accessToken, refreshToken, profile, done) => {
     return done(null, profile);
   }
 ));
@@ -48,9 +80,9 @@ passport.deserializeUser((user, done) => {
   done(null, user);
 });
 
-////////////////////
-//EXPRESS APP SET-UP
-///////////////////
+//////////////////////
+//EXPRESS APP SET-UP//
+/////////////////////
 import session from 'express-session';
 import path from 'path';
 const PORT = process.env.HTTP_PORT || LOCAL_PORT;
@@ -66,9 +98,9 @@ app
   .use(passport.session())
   .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
-/////////////////////
-//EXPRESS APP ROUTES
-/////////////////////
+//////////////////////
+//EXPRESS APP ROUTES//
+//////////////////////
 
 //AUTHENTICATE route: Uses passport to authenticate with GitHub.
 //Should be accessed when user clicks on 'Login with GitHub' button on 
