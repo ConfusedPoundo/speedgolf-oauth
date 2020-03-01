@@ -17,7 +17,7 @@ mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
   );
 
 //Define schema that maps to a document in the Users collection in the appdb
-//database.  See https://mongoosejs.com/docs/guide.html
+//database.
 const Schema = mongoose.Schema;
 const userSchema = new Schema({
   id: String, //unique identifier for user
@@ -49,35 +49,45 @@ passport.use(new GithubStrategy({
     clientSecret: "1e54162ecb7230eca9d26cc6484636e561e4d838",
     callbackURL: DEPLOY_URL + "/auth/github/callback"
   },
-  (accessToken, refreshToken, profile, done) => {
-    return done(null, profile);
+  //The following function is called after user authenticates with github
+  async (accessToken, refreshToken, profile, done) => {
+    console.log("User authenticated through GitHub! In passport callback.")
+    //Our convention is to build userId from username and provider
+    const userId = `${profile.username}@${profile.provider}`;
+    //See if document with this userId exists in database 
+    let currentUser = await User.findOne({id: userId});
+    if (!currentUser) { //if not, add this user to the database
+        currentUser = await new User({
+        id: userId,
+        displayName: profile.username,
+        authStrategy: profile.provider,
+        profileImageUrl: profile.photos[0].value
+      }).save();
+    }
+    return done(null,currentUser);
   }
 ));
-
+  
 //Serialize the current user to the session
 passport.serializeUser((user, done) => {
   console.log("In serializeUser.");
-  //Note: The code below is just for this demo, which is not using a back-end
-  //database. When we have back-end database, we would put user info into the
-  //database in the callback above and only serialize the unique user id into
-  //the session.
-  let userObject = {
-    id: user.username + "@github",
-    username : user.username,
-    provider : user.provider,
-    profileImageUrl : user.photos[0].value
-  };
-  done(null, userObject);
+  console.log("Contents of user param: " + JSON.stringify(user));
+  done(null,user.id);
 });
 
 //Deserialize the current user from the session
 //to persistent storage.
-passport.deserializeUser((user, done) => {
+passport.deserializeUser(async (userId, done) => {
   console.log("In deserializeUser.");
-  //TO DO: Look up the user in the database and attach their data record to
-  //req.user. For the purposes of this demo, the user record received as a param 
-  //is just being passed through, without any database lookup.
-  done(null, user);
+  console.log("Contents of user param: " + userId);
+  let thisUser;
+  try {
+    thisUser = await User.findOne({id: userId});
+    console.log("User with id " + userId + " found in DB. User object will be available in server routes as req.user.")
+    done(null,thisUser);
+  } catch (err) {
+    done(err);
+  }
 });
 
 //////////////////////
@@ -132,7 +142,7 @@ app.get('/auth/test', (req, res) => {
     const isAuth = req.isAuthenticated();
     if (isAuth) {
         console.log("User is authenticated");
-        console.log("User record tied to session: " + JSON.stringify(req.user));
+        console.log("User object in req.user: " + JSON.stringify(req.user));
     } else {
         //User is not authenticated.
         console.log("User is not authenticated");
