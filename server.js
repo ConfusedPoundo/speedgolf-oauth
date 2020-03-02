@@ -21,6 +21,7 @@ mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
 const Schema = mongoose.Schema;
 const userSchema = new Schema({
   id: String, //unique identifier for user
+  password: String, //unencrypted password (for now!)
   displayName: String, //Name to be displayed within app
   authStrategy: String, //strategy used to authenticate, e.g., github, local
   profileImageUrl: String //link to profile image
@@ -67,6 +68,33 @@ passport.use(new GithubStrategy({
     return done(null,currentUser);
   }
 ));
+
+import passportLocal from 'passport-local';
+const LocalStrategy = passportLocal.Strategy;
+passport.use(new LocalStrategy({passReqToCallback: true},
+  //Called when user is attempting to log in with username and password. 
+  //userId contains the email address entered into the form and password
+  //contains the password entered into the form.
+  async (req, userId, password, done) => {
+    let thisUser;
+    try {
+      thisUser = await User.findOne({id: userId});
+      if (thisUser) {
+        if (thisUser.password === password) {
+          return done(null, thisUser);
+        } else {
+          req.authError = "The password is incorrect. Please try again or reset your password.";
+          return done(null, false)
+        }
+      } else { //userId not found in DB
+        req.authError = "There is no account with email " + userId + ". Please try again.";
+        return done(null, false);
+      }
+    } catch (err) {
+      return done(err);
+    }
+  }
+));
   
 //Serialize the current user to the session
 passport.serializeUser((user, done) => {
@@ -83,8 +111,12 @@ passport.deserializeUser(async (userId, done) => {
   let thisUser;
   try {
     thisUser = await User.findOne({id: userId});
-    console.log("User with id " + userId + " found in DB. User object will be available in server routes as req.user.")
-    done(null,thisUser);
+    if (thisUser) {
+      console.log("User with id " + userId + " found in DB. User object will be available in server routes as req.user.")
+      done(null,thisUser);
+    } else {
+      done(new error("Error: Could not find user with id " + userId + " in DB, so user could not be deserialized to session."));
+    }
   } catch (err) {
     done(err);
   }
@@ -150,3 +182,23 @@ app.get('/auth/test', (req, res) => {
     //Return JSON object to client with results.
     res.json({isAuthenticated: isAuth, user: req.user});
 });
+
+//LOGIN route: Attempts to log in user using local strategy
+app.post('/login', 
+  passport.authenticate('local', { failWithError: true }),
+  (req, res) => {
+    console.log("/login route reached: successful authentication.");
+    //Redirect to app's main page; the /auth/test route should return true
+    res.status(200).send("Login successful").redirect('/');
+  },
+  (err, req, res, next) => {
+    console.log("/login route reached: unsuccessful authentication");
+    //res.sendStatus(401);
+    if (req.authError) {
+      console.log("req.authError: " + req.authError);
+      res.status(401).send(req.authError);
+    } else {
+      res.status(401).send("Unexpected error occurred when attempting to authenticate. Please try again.");
+    }
+    //Note: Do NOT redirect! Login page will handle error message.
+  });

@@ -307,3 +307,7 @@ body {
   text-align: center;
 }
 
+.login-error-msg-text {
+ font-size: 16;
+ color: white; 
+}

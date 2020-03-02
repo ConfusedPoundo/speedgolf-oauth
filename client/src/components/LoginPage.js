@@ -17,6 +17,7 @@ class LoginPage extends React.Component {
         this.resetPasswordRepeatRef = React.createRef();
         this.state = {loginBtnIcon: "fa fa-sign-in",
                       loginBtnLabel: "Log In",
+                      loginMsg: "",
                       githubIcon: "fa fa-github",
                       githubLabel: "Sign in with GitHub",
                       showAccountDialog: false,
@@ -40,6 +41,7 @@ class LoginPage extends React.Component {
 }
 
 //handleLogin -- Callback function that sets up initial app state upon login.
+//Note: This implements the OLD local authentication strategy that used localStorage
 handleLogin = () => {
     //Stop spinner and set authStrategy to local
     this.setState({loginBtnIcon: "fa fa-sign-in",
@@ -59,14 +61,40 @@ handleLogin = () => {
     this.props.changeMode(AppMode.FEED);
 }
 
-//handleLoginSubmit -- Called when user clicks on login button. Initiate spinner
-//for 1 second and call handleLogin to do the work.
-handleLoginSubmit = (event) => {
+//handleLoginSubmit (Passport) -- When the user clicks the login button, we want to
+//initiate a login using Passport's local method. We accomplish this through a
+//post request to the /login route, passing in the username and password
+handleLoginSubmit = async (event) => {
     event.preventDefault();
     this.setState({loginBtnIcon: "fa fa-spin fa-spinner",
                    loginBtnLabel: "Logging In..."});
-    //Initiate spinner for 1 second
-    setTimeout(this.handleLogin,1000);
+    const url = "/login?username=" + this.emailInputRef.current.value +
+                "&password=" + this.passwordInputRef.current.value;
+    const res = await fetch(url, {method: 'POST'}); 
+    if (res.status == 401) { //Unsuccessful login: display error message and invite re-login
+      //Grab textual response message
+      const resText = await res.text();
+      this.setState({loginBtnIcon: "fa fa-sign-in",
+                     loginBtnLabel: "Log In",
+                     loginMsg: resText}, () => setTimeout(this.hideErrorMsg,3000));
+    }
+}
+
+//hideErrorMsg -- Clears the email and pasword field and hides the login error
+//message, thus inviting a new attempt.
+hideErrorMsg = () => {
+    this.emailInputRef.current.value = "";
+    this.passwordInputRef.current.value = "";
+    this.setState({loginMsg: ""});
+}
+
+//handleLoginSubmit (OLD) -- Called when user clicks on login button. Initiate spinner
+//for 1 second and call handleLogin to do the work.
+handleLoginSubmitOld = (event) => {
+    event.preventDefault();
+    this.setState({loginBtnIcon: "fa fa-spin fa-spinner",
+                   loginBtnLabel: "Logging In..."});
+    this.handleLoginPassportSubmit();
 }
 
 //handleOAuthLogin -- Callback function that initiates contact with OAuth
@@ -476,7 +504,7 @@ render() {
     <div id="login-mode-div" className="padded-page">
     <center>
         <h1 />
-        <form onSubmit={this.handleLoginSubmit} onChange={this.handleLoginChange}>
+        <form onSubmit={this.handleLoginSubmit}>
         <label htmlFor="emailInput" style={{ padding: 0, fontSize: 24 }}>
             Email:
             <input
@@ -500,7 +528,7 @@ render() {
             required={true}
             />
         </label>
-        <p className="bg-danger" id="feedback" style={{ fontSize: 16 }} />
+        <p className="bg-danger login-error-msg-text">{this.state.loginMsg}</p>
         <button
             type="submit"
             className="btn-color-theme btn btn-primary btn-block login-btn">
