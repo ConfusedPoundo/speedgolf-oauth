@@ -9,16 +9,7 @@
 			{
 				"pattern": {
 					"type": "string",
-					"expression": "alias /var/app/current/client/build/static;",
-					"ignoreCase": false,
-					"wholeMatch": false
-				},
-				"color": "yellow"
-			},
-			{
-				"pattern": {
-					"type": "string",
-					"expression": "upstream nodejs {\r\n        server 127.0.0.1:30000;\r\n        keepalive 256;",
+					"expression": "<p className=\"bg-danger login-error-msg-text\">{this.state.loginMsg}</p>",
 					"ignoreCase": false,
 					"wholeMatch": false
 				},
