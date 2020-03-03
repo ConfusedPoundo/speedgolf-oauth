@@ -103,8 +103,8 @@ passport.serializeUser((user, done) => {
   done(null,user.id);
 });
 
-//Deserialize the current user from the session
-//to persistent storage.
+//Deserialize the current user from persistent storage to
+//the current session.
 passport.deserializeUser(async (userId, done) => {
   console.log("In deserializeUser.");
   console.log("Contents of user param: " + userId);
@@ -129,15 +129,18 @@ import session from 'express-session';
 import path from 'path';
 const PORT = process.env.HTTP_PORT || LOCAL_PORT;
 import express from 'express';
+import {md5} from './md5.js';
+
 const app = express();
 app
-  .use(session({secret: "speedgolf", 
+  .use(session({secret: "speedgolf2020", 
                 resave: false,
                 saveUninitialized: false,
                 cookie: {maxAge: 1000 * 60}}))
   .use(express.static(path.join(__dirname,"client/build")))
   .use(passport.initialize())
   .use(passport.session())
+  .use(express.json())
   .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
 //////////////////////
@@ -155,7 +158,7 @@ app.get('/auth/github', passport.authenticate('github'));
 app.get('/auth/github/callback', passport.authenticate('github', { failureRedirect: '/' }),
   (req, res) => {
     console.log("auth/github/callback reached.")
-    res.redirect('/'); //sends user back to login screen; req.isAuthenticated() indicates status
+    res.redirect('/'); //sends user back to app; req.isAuthenticated() indicates status
   }
 );
 
@@ -188,8 +191,15 @@ app.post('/login',
   passport.authenticate('local', { failWithError: true }),
   (req, res) => {
     console.log("/login route reached: successful authentication.");
-    //Redirect to app's main page; the /auth/test route should return true
-    res.status(200).send("Login successful").redirect('/');
+    //console.log("contents of req: " + JSON.stringify(req));
+    //Here, we somehow need to trigger deserializeUser().
+    //It would also be nice to redirect to '/', forcing a call to 
+    //the /auth/test route to update app state with user info.
+    //If that can't be done, I'm wondering if there's a way to send
+    //back to client a JSON response containing the user info.
+    //It's a cludgy workaround but it would git 'er done. 
+    
+    res.status(200).send("Login successful");
   },
   (err, req, res, next) => {
     console.log("/login route reached: unsuccessful authentication");
@@ -201,4 +211,34 @@ app.post('/login',
       res.status(401).send("Unexpected error occurred when attempting to authenticate. Please try again.");
     }
     //Note: Do NOT redirect! Login page will handle error message.
+  });
+
+  //NEWACCOUNT route: Attempts to add a new user account using local strategy
+  app.post('/newaccount',  async (req, res, next) => {
+    console.log("in /newaccont route.");
+    console.log("in /newaccont route with body = " + JSON.stringify(req.body));
+    if (!req.body || !req.body.userId || !req.body.password) {
+      //Body does not contain correct properties
+      return res.status(401).send("POST request for new account formulated incorrectly. Please contact app developer.")
+    }
+    let thisUser;
+    try {
+      thisUser = await User.findOne({id: req.body.userId});
+      console.log("thisUser: " + JSON.stringify(thisUser));
+      if (thisUser) { //account already exists
+        res.status(401).send("There is already an account with email '" + userId + "'.  Please choose a different email.");
+      } else { //account available -- add to database
+        thisUser = await new User({
+          id: req.body.userId,
+          password: req.body.password,
+          displayName: req.body.userId,
+          authStrategy: 'local',
+          profileImageUrl: `https://www.gravatar.com/avatar/${md5(req.body.userId)}`
+        }).save();
+        return res.status(200).send("New account for '" + req.body.userId + "' successfully created.");
+      }
+    } catch (err) {
+      console.log("Error occurred accessing the database.")
+      return next(error);
+    }
   });

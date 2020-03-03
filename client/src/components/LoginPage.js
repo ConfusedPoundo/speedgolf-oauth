@@ -71,9 +71,21 @@ handleLoginSubmit = async (event) => {
     const url = "/login?username=" + this.emailInputRef.current.value +
                 "&password=" + this.passwordInputRef.current.value;
     const res = await fetch(url, {method: 'POST'}); 
-    if (res.status == 401) { //Unsuccessful login: display error message and invite re-login
-      //Grab textual response message
+    if (res.status == 200) { //successful login!
+        //The following will force componentDidMount to fire and the
+        //authentication session to load.
+        //alert("Successful login!");
+        window.open("/","_self");
+       //The code below is a kludge to force a state change without a cookie
+       //session. Hopefully we won't have to use it!
+       //Set authenticated state in parent component
+      //this.props.setAuthenticated(true);
+      //Trigger switch to FEED mode (default app landing page)
+      //this.props.changeMode(AppMode.FEED);
+    } else { //Unsuccessful login
+      //Grab textual error message
       const resText = await res.text();
+      //Display message and invite another
       this.setState({loginBtnIcon: "fa fa-sign-in",
                      loginBtnLabel: "Log In",
                      loginMsg: resText}, () => setTimeout(this.hideErrorMsg,3000));
