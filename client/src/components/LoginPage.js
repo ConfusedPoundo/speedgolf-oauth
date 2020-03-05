@@ -132,13 +132,13 @@ checkAccountValidity = () => {
     } else {
         this.repeatPassRef.current.setCustomValidity("");
     }
-    let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
-    if (data != null && data.hasOwnProperty(this.state.accountName)) {
+    //let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
+    //if (data != null && data.hasOwnProperty(this.state.accountName)) {
         //The user name is already taken
-        this.newUserRef.current.setCustomValidity("An account already exists under this email address. Use 'Reset password' to recover the password.");
-    } else {
-        this.newUserRef.current.setCustomValidity("");
-    }
+   //     this.newUserRef.current.setCustomValidity("An account already exists under this email address. Use 'Reset password' to recover the password.");
+   // } else {
+   //     this.newUserRef.current.setCustomValidity("");
+   // }
 }
     
 //handleNewAccountChange -- Called when a field in a dialog box form changes.
@@ -152,32 +152,25 @@ handleNewAccountChange = (event) => {
 //Custom data checking ensures user account under this email does not exist
 //and that the rest of the info is valid. At this point, we can create 
 //new object for user, save to localStorage and take user to app's landing page. 
-handleCreateAccount = (event) => {
+handleCreateAccount = async (event) => {
     event.preventDefault();
-    let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
-    //Create fresh user data object for new user
-    if (data == null) {
-        data = {}; //create empty data object
+    const loginInfo = {userId: this.state.accountName,
+                       password: this.state.accountPassword};
+    const res = await fetch('/newaccount', {
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+        method: 'POST',
+        body: JSON.stringify(loginInfo)}); 
+    if (res.status == 200) { //successful account creation!
+        alert("Your account was successfully created. Please log in using your email and password to continue.");
+        this.setState({showAccountDialog: false});
+    } else { //Unsuccessful account creation
+      //Grab textual error message
+      const resText = await res.text();
+      alert(resText); //most likely the username is already taken
     }
-    data[this.state.accountName] = {
-        accountInfo: {
-        provider: "local",
-        password: this.state.accountPassword,
-        securityQuestion: this.state.accountSecurityQuestion,
-        securityAnswer: this.state.accountSecurityAnswer
-        },
-        rounds: {}, 
-        roundCount: 0
-    };
-    //Commit to localStorage:
-    localStorage.setItem("speedgolfUserData",JSON.stringify(data));
-    //Set current user
-    this.props.setUser({id: this.state.accountName,
-                        username: this.state.accountName,
-                        provider: "local",
-                        profileImageUrl: `https://www.gravatar.com/avatar/${md5(this.state.accountName)}`} );
-    //Log in user by switching to FEED mode
-    this.props.changeMode(AppMode.FEED);
 }
 
 //handleLoginChange -- Check the validity of the username (email address)
