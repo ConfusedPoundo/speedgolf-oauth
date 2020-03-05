@@ -215,7 +215,6 @@ app.post('/login',
 
   //NEWACCOUNT route: Attempts to add a new user account using local strategy
   app.post('/newaccount',  async (req, res, next) => {
-    console.log("in /newaccont route.");
     console.log("in /newaccont route with body = " + JSON.stringify(req.body));
     if (!req.body || !req.body.userId || !req.body.password) {
       //Body does not contain correct properties
@@ -224,9 +223,8 @@ app.post('/login',
     let thisUser;
     try {
       thisUser = await User.findOne({id: req.body.userId});
-      console.log("thisUser: " + JSON.stringify(thisUser));
       if (thisUser) { //account already exists
-        res.status(401).send("There is already an account with email '" + userId + "'.  Please choose a different email.");
+        res.status(401).send("There is already an account with email '" + req.body.userId + "'.  Please choose a different email.");
       } else { //account available -- add to database
         thisUser = await new User({
           id: req.body.userId,
@@ -238,7 +236,7 @@ app.post('/login',
         return res.status(200).send("New account for '" + req.body.userId + "' successfully created.");
       }
     } catch (err) {
-      console.log("Error occurred accessing the database.")
-      return next(error);
+      console.log("Error occurred when looking up user in database.")
+      return next(err);
     }
   });
