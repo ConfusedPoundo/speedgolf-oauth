@@ -94,15 +94,6 @@ hideErrorMsg = () => {
     this.setState({loginMsg: ""});
 }
 
-//handleLoginSubmit (OLD) -- Called when user clicks on login button. Initiate spinner
-//for 1 second and call handleLogin to do the work.
-handleLoginSubmitOld = (event) => {
-    event.preventDefault();
-    this.setState({loginBtnIcon: "fa fa-spin fa-spinner",
-                   loginBtnLabel: "Logging In..."});
-    this.handleLoginPassportSubmit();
-}
-
 //handleOAuthLogin -- Callback function that initiates contact with OAuth
 //provider
 handleOAuthLogin = (provider) => {
@@ -155,7 +146,9 @@ handleNewAccountChange = (event) => {
 handleCreateAccount = async (event) => {
     event.preventDefault();
     const loginInfo = {userId: this.state.accountName,
-                       password: this.state.accountPassword};
+                       password: this.state.accountPassword,
+                       securityQuestion: this.state.accountSecurityQuestion,
+                       securityAnswer: this.state.accountSecurityAnswer};
     const res = await fetch('/newaccount', {
         headers: {
             'Accept': 'application/json',
