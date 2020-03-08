@@ -295,21 +295,36 @@ handleLoginChange = (event) => {
 //button, we check whether the account exists. If it does, we update the state,
 //setting the resetEmail var to the email entered, hiding the current dialog box
 //and showing the security question dialog box.
-handleLookUpAccount = (event) => {
+handleLookUpAccount = async (event) => {
     event.preventDefault();
-    let thisUser = this.accountEmailRef.current.value;
-    let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
-    //Check username and password:
-    if (data == null || !data.hasOwnProperty(thisUser)) { 
-        alert("Sorry, there is no account associated with this email address.");
+    let url = "/accountexists?userId=" + this.accountEmailRef.current.value;
+    let res = await fetch(url, {method: 'GET'});
+    let body;
+    if (res.status != 200) {
+        alert("Sorry, there was a problem communicating with the server. Please try again.");
         this.accountEmailRef.current.focus();
-    } else {
-        this.setState({resetEmail: thisUser, 
-                       resetQuestion: data[thisUser].accountInfo.securityQuestion,
-                       resetAnswer: data[thisUser].accountInfo.securityAnswer,
-                       showLookUpAccountDialog: false, 
-                       showSecurityQuestionDialog: true});
-    }
+        return;
+    } 
+    body = await res.json();
+    if (!body.result) {
+        alert("Sorry, there is no account associated with this email address.");
+        this.accountEmailRef.current.select();
+        return;
+    } 
+    //if here, account exists -- grab security question
+    url = "/securityquestion?userId=" + this.accountEmailRef.current.value;
+    res = await fetch(url, {method: 'GET'});
+    if (res.status != 200) {
+        alert("Sorry, there was a problem communicating with the server. Please try again.");
+        this.accountEmailRef.current.focus();
+        return;
+    } 
+    let question = await res.text();
+    this.setState({resetEmail: this.accountEmailRef.current.value, 
+                   resetQuestion: question,
+                   showLookUpAccountDialog: false, 
+                   showSecurityQuestionDialog: true});
+    this.emailInputRef.current.value = ""; //clear out field
 }
 
 //renderLookUpAccountDialog -- Present a dialog box for user to enter the email address
@@ -354,16 +369,25 @@ renderLookUpAccountDialog = () => {
 //handleSecurityQuestionResponse: When the user clicks on the "Check Answer" dialog box
 //button, we check whether the security question answer is correct. If it is,
 //present dialog box for resetting the password. 
-handleSecurityQuestionResponse = (event) => {
+handleSecurityQuestionResponse = async(event) => {
     event.preventDefault();
-    let response = this.securityAnswerRef.current.value;
-    if (response != this.state.resetAnswer) { 
+    let url = "verifysecurityanswer/?userId=" + this.state.resetEmail + 
+      "&answer=" + this.securityAnswerRef.current.value;
+    let res = await fetch(url, {method: 'GET'});
+    if (res.status != 200) {
+        alert("There was a problem communicating with the server. Try again.");
+        return;
+    } 
+    let body = await res.json();
+    if (!body.result) {
         alert("Sorry, that is not the correct answer to the security question.");
         this.securityAnswerRef.current.select();
-    } else {
-        this.setState({showSecurityQuestionDialog: false, 
-                       showPasswordResetDialog: true});
-    }
+        return;
+    } 
+    this.setState({resetAnswer: this.securityAnswerRef.current.value,
+                   showSecurityQuestionDialog: false, 
+                   showPasswordResetDialog: true});
+     this.securityAnswerRef.current.value = ""; //clear out field
 }
 
 //renderSecurityQuestionDialog -- Present a dialog box for user to enter answer
@@ -376,7 +400,7 @@ renderSecurityQuestionDialog = () => {
           <div className="modal-header">
             <h3 className="modal-title"><b>Answer Security Question</b>
               <button className="close-modal-button" 
-                onClick={() => {this.setState({resetEmail: "", 
+                onClick={() => { this.setState({resetEmail: "", 
                                  resetQuestion: "",
                                  resetAnswer: "",
                                  showSecurityQuestionDialog: false})}}>
@@ -419,26 +443,28 @@ renderSecurityQuestionDialog = () => {
 //handleResetPassword: When the user clicks on the "Reset Password" dialog box
 //button, we need check whether the passwords match. If they do,
 //we reset the password and log the user in. 
-handleResetPassword = (event) => {
+handleResetPassword = async(event) => {
     event.preventDefault();
-   
     if (this.resetPasswordRef.current.value != this.resetPasswordRepeatRef.current.value) { 
         alert("Sorry, The passwords you entered do not match. Please try again.");
         this.resetPasswordRepeatRef.current.select();
-    } else { //Reset password and log user in
-        let data = JSON.parse(localStorage.getItem("speedgolfUserData"));
-        data[this.state.resetEmail].accountInfo.password = this.resetPasswordRef.current.value;
-        localStorage.setItem("speedgolfUserData",JSON.stringify(data));
-        this.props.setUser({id: this.state.resetEmail,
-                            username: this.state.resetEmail,
-                            provider: "local",
-                            profileImageUrl: `https://www.gravatar.com/avatar/${md5(this.state.resetEmail)}`});
-        this.props.changeMode(AppMode.FEED);
-        this.setState({resetEmail: "", 
-                       resetQuestion: "",
-                       resetAnswer: "",
-                       showPasswordResetDialog: false});
+        return;
     }
+    const resetInfo = {userId: this.state.resetEmail,
+                        answer: this.state.resetAnswer,
+                        newPassword: this.resetPasswordRef.current.value};
+    const res = await fetch('/resetpassword', {
+        headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+        },
+        method: 'POST',
+        body: JSON.stringify(resetInfo)}); 
+    const text = await res.text();
+    alert(text);   
+    this.resetPasswordRef.current.value = "";
+    this.resetPasswordRepeatRef.current.value = "";
+    this.setState({showPasswordResetDialog: false}); 
 }
 
 //renderPasswordResetDialog -- Present a dialog box for user to enter answer
@@ -470,6 +496,7 @@ renderPasswordResetDialog = () => {
                 ref={this.resetPasswordRef}
                 />
             </label>
+            <p />
             <label>
                 Repeat New Password: 
                 <input
@@ -531,7 +558,8 @@ render() {
         <p><button type="button" className="btn btn-link login-link" 
              onClick={() => {this.setState({showAccountDialog: true});}}>Create an account</button> | 
            <button type="button" className="btn btn-link login-link"
-             onClick={() => {this.setState({showLookUpAccountDialog: true});}}>Reset your password</button>
+             onClick={() => {this.setState({showLookUpAccountDialog: true});
+                             this.resetEmail.current.focus();}}>Reset your password</button>
         </p>
         <p></p>
             <button type="button" className="btn btn-github"
@@ -540,7 +568,7 @@ render() {
             </button>
         <p></p>
         <p>
-            <i>Version CptS 489 Sp20 React Oauth with GitHub</i>
+            <i>Version CptS 489 Sp20 React Oauth + Local + MongoDB</i>
         </p>
         <p>
             <i>© 2020 Professor of Speedgolf. All rights reserved.</i>
