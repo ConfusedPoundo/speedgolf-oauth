@@ -19,6 +19,7 @@ mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
 //Define schema that maps to a document in the Users collection in the appdb
 //database.
 const Schema = mongoose.Schema;
+
 const roundSchema = new Schema({
   date: {type: Date, required: true},
   course: {type: String, required: true},
@@ -27,8 +28,10 @@ const roundSchema = new Schema({
   strokes: {type: Number, required: true, min: 1, max: 300},
   minutes: {type: Number, required: true, min: 1, max: 240},
   seconds: {type: Number, required: true, min: 0, max: 60},
-  SGS: {type: Number, required: true, min: 0, max: 32459},
-  notes: {type: String, required: false}
+  SGS: {type: Number, 
+        default: function(){return (this.strokes * 60) + (this.minutes * 60) + this.seconds},
+        set: function(){return (this.strokes * 60) + (this.minutes * 60) + this.seconds}},
+  notes: {type: String, required: true}
 });
 
 const userSchema = new Schema({
@@ -39,8 +42,7 @@ const userSchema = new Schema({
   profileImageUrl: {type: String, required: true}, //link to profile image
   securityQuestion: String,
   securityAnswer: {type: String, required: function() {return this.securityQuestion ? true: false}},
-  rounds: [roundSchema],
-  roundCount: {type: Number, rquired: true, min:0}
+  rounds: [roundSchema]
 });
 
 //Convert schema to model
@@ -159,16 +161,16 @@ app
   .use(express.json())
   .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
-//////////////////////
-//EXPRESS APP ROUTES//
-//////////////////////
+///////////////////////////////////////////////////////////////////
+//EXPRESS APP ROUTES FOR USER AUTHENTICATION & ACCOUNT MANAGEMENT//
+///////////////////////////////////////////////////////////////////
 
-//AUTHENTICATE route: Uses passport to authenticate with GitHub.
+//AUTHENTICATE route (GET): Uses passport to authenticate with GitHub.
 //Should be accessed when user clicks on 'Login with GitHub' button on 
 //Log In page.
 app.get('/auth/github', passport.authenticate('github'));
 
-//CALLBACK route:  GitHub will call this route after the
+//CALLBACK route (GET):  GitHub will call this route after the
 //OAuth authentication process is complete.
 //req.isAuthenticated() tells us whether authentication was successful.
 app.get('/auth/github/callback', passport.authenticate('github', { failureRedirect: '/' }),
@@ -178,7 +180,7 @@ app.get('/auth/github/callback', passport.authenticate('github', { failureRedire
   }
 );
 
-//LOGOUT route: Use passport's req.logout() method to log the user out and
+//LOGOUT route (GET): Use passport's req.logout() method to log the user out and
 //redirect the user to the main app page. req.isAuthenticated() is toggled to false.
 app.get('/auth/logout', (req, res) => {
     console.log('/auth/logout reached. Logging out');
@@ -186,7 +188,7 @@ app.get('/auth/logout', (req, res) => {
     res.redirect('/');
 });
 
-//AUTH TEST route: Tests whether user was successfully authenticated.
+//AUTH TEST route (GET): Tests whether user was successfully authenticated.
 //Should be called from the React.js client to set up app state.
 app.get('/auth/test', (req, res) => {
     console.log("auth/test reached.");
@@ -202,7 +204,7 @@ app.get('/auth/test', (req, res) => {
     res.json({isAuthenticated: isAuth, user: req.user});
 });
 
-//LOGIN route: Attempts to log in user using local strategy
+//LOGIN route (POST): Attempts to log in user using local strategy
 app.post('/login', 
   passport.authenticate('local', { failWithError: true }),
   (req, res) => {
@@ -221,7 +223,7 @@ app.post('/login',
     }
   });
 
-  //NEWACCOUNT route: Attempts to add a new user account using local strategy
+  //NEWACCOUNT route (POST): Attempts to add a new user account using local strategy
   app.post('/newaccount',  async (req, res, next) => {
     console.log("in /newaccont route with body = " + JSON.stringify(req.body));
     if (!req.hasOwnProperty("body") || !req.body.hasOwnProperty("userId") || 
@@ -253,7 +255,7 @@ app.post('/login',
     }
   });
 
-  //ACCOUNTEXISTS route: Checks whether account with value of query param userId
+  //ACCOUNTEXISTS route (GET): Checks whether account with value of query param userId
   //exists, returning true if so, false otherwise. Note that we pass the
   //result as the 'result' property of a JSON object.
   app.get('/accountexists', async(req, res, next) => {
@@ -273,7 +275,7 @@ app.post('/login',
     }
   });
 
-  //SECURITYQUESTION route: Returns security question associated with user
+  //SECURITYQUESTION route (GET): Returns security question associated with user
   //account with id === req.body.userId, if account exists. Otherwise returns
   //message.
   app.get('/securityquestion', async(req, res, next) => {
@@ -297,7 +299,7 @@ app.post('/login',
     }
   });
 
-  //VERIFYSECURITYANSWER route: Returns true if the answer provided as a
+  //VERIFYSECURITYANSWER route (GET): Returns true if the answer provided as a
   //query param is the correct answer to the security question of the acount
   //associated with userId, false otherwise. Note that result is returned within
   //JSON object
@@ -322,7 +324,7 @@ app.post('/login',
     }
   });
 
-  //RESETPASSWORD route: POST request to change the user's password. The message
+  //RESETPASSWORD route (POST): Change the user's password. The message
   //body is a JSON object containing three fields: userId, securityAnswer and
   //newPassword. If securityAnswer does not match the one on file for userId,
   //the request fails. Otherwise, the password is updated.
@@ -363,3 +365,44 @@ app.post('/login',
       return next(err);
     }
   });
+
+///////////////////////////////////////////
+//EXPRESS APP ROUTES FOR ROUNDS CRUD OPS //
+///////////////////////////////////////////
+
+//ADDROUND route (POST): Given a JSON object containing data for a new round, add the
+//round to the database
+app.post('/addround', async (req, res, next) => {
+  console.log("in /addround route with body = " + JSON.stringify(req.body));
+  if (!req.body.hasOwnProperty("userId") ||
+      !req.body.hasOwnProperty("date") || 
+      !req.body.hasOwnProperty("course") || 
+      !req.body.hasOwnProperty("type") ||
+      !req.body.hasOwnProperty("holes") || 
+      !req.body.hasOwnProperty("strokes") ||
+      !req.body.hasOwnProperty("minutes") ||
+      !req.body.hasOwnProperty("seconds") || 
+      !req.body.hasOwnProperty("notes")) {
+    //Body does not contain correct properties
+    return res.status(401).send("POST request for /addround formulated incorrectly." +
+      "Its body must contain userId + all 9 required fields.")
+  }
+  let newRound = {...req.body};
+  delete newRound.userId; //userId not part of round schema
+  try {
+    console.log(" in addround/ with userId = '" + req.body.userId + "' and new round = " 
+      + JSON.stringify(newRound));
+    let status = await User.updateOne(
+    {id: req.body.userId},
+    {$push: {rounds: newRound}});
+    if (status.nModified != 1) { //Should never happen!
+      res.status(401).send("Unexpected error occurred when adding round to database. Round was not added.");
+    } else {
+      res.status(200).send("Round successfully added to User document.");
+    }
+  } catch (err) {
+    console.log(err);
+    return res.status(401).send("Unexpected error occurred when adding round to database. Round was not added.");
+  } 
+});
+
