@@ -6,7 +6,7 @@
 ///////////////////
 //MONGOOSE SET-UP//
 ///////////////////
-import mongoose from 'mongoose';
+import mongoose, { Collection } from 'mongoose';
 const connectStr = 'mongodb://localhost/appdb';
 
 //Open connection to database
@@ -19,6 +19,18 @@ mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
 //Define schema that maps to a document in the Users collection in the appdb
 //database.
 const Schema = mongoose.Schema;
+const roundSchema = new Schema({
+  date: {type: Date, required: true},
+  course: {type: String, required: true},
+  type: {type: String, required: true, enum: ['practice','tournament']},
+  holes: {type: Number, required: true, min: 1, max: 18},
+  strokes: {type: Number, required: true, min: 1, max: 300},
+  minutes: {type: Number, required: true, min: 1, max: 240},
+  seconds: {type: Number, required: true, min: 0, max: 60},
+  SGS: {type: Number, required: true, min: 0, max: 32459},
+  notes: {type: String, required: false}
+});
+
 const userSchema = new Schema({
   id: {type: String, required: true}, //unique identifier for user
   password: String, //unencrypted password (for now!)
@@ -26,7 +38,9 @@ const userSchema = new Schema({
   authStrategy: {type: String, required: true}, //strategy used to authenticate, e.g., github, local
   profileImageUrl: {type: String, required: true}, //link to profile image
   securityQuestion: String,
-  securityAnswer: {type: String, required: function() {return this.securityQuestion ? true: false}}
+  securityAnswer: {type: String, required: function() {return this.securityQuestion ? true: false}},
+  rounds: [roundSchema],
+  roundCount: {type: Number, rquired: true, min:0}
 });
 
 //Convert schema to model
