@@ -8,6 +8,7 @@
 ///////////////////
 import mongoose, { Collection } from 'mongoose';
 const connectStr = 'mongodb://localhost/appdb';
+mongoose.set('useFindAndModify', false);
 
 //Open connection to database
 mongoose.connect(connectStr, {useNewUrlParser: true, useUnifiedTopology: true})
@@ -30,7 +31,11 @@ const roundSchema = new Schema({
   seconds: {type: Number, required: true, min: 0, max: 60},
   SGS: {type: Number, 
         default: function(){return (this.strokes * 60) + (this.minutes * 60) + this.seconds},
-        set: function(){return (this.strokes * 60) + (this.minutes * 60) + this.seconds}},
+        set: function(v) {
+           console.log("in set with this = " + JSON.stringify(this));
+           return (this.strokes * 60) + (this.minutes * 60) + this.seconds;
+          } 
+       },
   notes: {type: String, required: true}
 });
 
@@ -161,9 +166,9 @@ app
   .use(express.json())
   .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
-///////////////////////////////////////////////////////////////////
-//EXPRESS APP ROUTES FOR USER AUTHENTICATION & ACCOUNT MANAGEMENT//
-///////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+//EXPRESS APP ROUTES FOR USER AUTHENTICATION (/auth)//
+//////////////////////////////////////////////////////
 
 //AUTHENTICATE route (GET): Uses passport to authenticate with GitHub.
 //Should be accessed when user clicks on 'Login with GitHub' button on 
@@ -204,8 +209,9 @@ app.get('/auth/test', (req, res) => {
     res.json({isAuthenticated: isAuth, user: req.user});
 });
 
-//LOGIN route (POST): Attempts to log in user using local strategy
-app.post('/login', 
+//AUTH/LOGIN route (POST): Attempts to log in user using local strategy
+//username and password included as query parameters.
+app.post('/auth/login', 
   passport.authenticate('local', { failWithError: true }),
   (req, res) => {
     console.log("/login route reached: successful authentication.");
@@ -213,71 +219,21 @@ app.post('/login',
     //Assume client will redirect to '/' route to deserialize session
   },
   (err, req, res, next) => {
-    console.log("/login route reached: unsuccessful authentication");
+    console.log("/auth/login route reached: unsuccessful authentication");
     //res.sendStatus(401);
     if (req.authError) {
       console.log("req.authError: " + req.authError);
-      res.status(401).send(req.authError);
+      res.status(400).send(req.authError);
     } else {
-      res.status(401).send("Unexpected error occurred when attempting to authenticate. Please try again.");
+      res.status(400).send("Unexpected error occurred when attempting to authenticate. Please try again.");
     }
   });
 
-  //NEWACCOUNT route (POST): Attempts to add a new user account using local strategy
-  app.post('/newaccount',  async (req, res, next) => {
-    console.log("in /newaccont route with body = " + JSON.stringify(req.body));
-    if (!req.hasOwnProperty("body") || !req.body.hasOwnProperty("userId") || 
-        !req.body.hasOwnProperty("password")) {
-      //Body does not contain correct properties
-      return res.status(401).send("POST request for new account formulated incorrectly. " + 
-        "It must contain 'userId' and 'password' fields.")
-    }
-    let thisUser;
-    try {
-      thisUser = await User.findOne({id: req.body.userId});
-      if (thisUser) { //account already exists
-        res.status(401).send("There is already an account with email '" + req.body.userId + "'.  Please choose a different email.");
-      } else { //account available -- add to database
-        thisUser = await new User({
-          id: req.body.userId,
-          password: req.body.password,
-          displayName: req.body.userId,
-          authStrategy: 'local',
-          profileImageUrl: `https://www.gravatar.com/avatar/${md5(req.body.userId)}`,
-          securityQuestion: req.body.securityQuestion,
-          securityAnswer: req.body.securityAnswer
-        }).save();
-        return res.status(200).send("New account for '" + req.body.userId + "' successfully created.");
-      }
-    } catch (err) {
-      console.log("Error occurred when adding or looking up user in database.")
-      return next(err);
-    }
-  });
-
-  //ACCOUNTEXISTS route (GET): Checks whether account with value of query param userId
-  //exists, returning true if so, false otherwise. Note that we pass the
-  //result as the 'result' property of a JSON object.
-  app.get('/accountexists', async(req, res, next) => {
-    console.log("in /accountexists route with query params = " + JSON.stringify(req.query));
-    if (!req.query.hasOwnProperty("userId")) {
-      //Request does not contain correct query parameters
-      return res.status(401).send("GET request for accountexists route is improperly formatted." +
-                                  " It needs a 'userId' query parameter.")
-    }
-    let thisUser;
-    try {
-      thisUser = await User.findOne({id: req.query.userId});
-      res.status(200).json({result: thisUser != null});
-    } catch (err) {
-      console.log("Error occurred when looking up or accessing user in database.")
-      return next(err);
-    }
-  });
-
-  //SECURITYQUESTION route (GET): Returns security question associated with user
+  
+  //SECURITYQUESTION route (GET) DEPRECATED!: Returns security question associated with user
   //account with id === req.body.userId, if account exists. Otherwise returns
   //message.
+  //DEPRECATED: Use /user/userId
   app.get('/securityquestion', async(req, res, next) => {
     console.log("in /securityquestion route with query params = " + JSON.stringify(req.query));
     if (!req.query.hasOwnProperty("userId")) {
@@ -299,10 +255,11 @@ app.post('/login',
     }
   });
 
-  //VERIFYSECURITYANSWER route (GET): Returns true if the answer provided as a
+  //VERIFYSECURITYANSWER route (GET) DEPRECATED!: Returns true if the answer provided as a
   //query param is the correct answer to the security question of the acount
   //associated with userId, false otherwise. Note that result is returned within
   //JSON object
+  //Deprecated: Use user/userid
   app.get('/verifysecurityanswer', async(req, res, next) => {
     console.log("in /verifysecurityanswer route with query params = " + JSON.stringify(req.query));
     if (!req.query.hasOwnProperty("userId") || !req.query.hasOwnProperty("answer")) {
@@ -324,11 +281,12 @@ app.post('/login',
     }
   });
 
-  //RESETPASSWORD route (POST): Change the user's password. The message
+  //DEPRECATED: Use User/Id PUT request!
+  //AUTH/RESET route (POST): Change the user's password. The message
   //body is a JSON object containing three fields: userId, securityAnswer and
   //newPassword. If securityAnswer does not match the one on file for userId,
   //the request fails. Otherwise, the password is updated.
-  app.post('/resetpassword',  async (req, res, next) => {
+  app.post('auth/reset',  async (req, res, next) => {
     console.log("in /resetpassword route with body = " + JSON.stringify(req.body));
     if (!req.body.hasOwnProperty("userId") || 
         !req.body.hasOwnProperty("answer") || 
@@ -366,16 +324,165 @@ app.post('/login',
     }
   });
 
-///////////////////////////////////////////
-//EXPRESS APP ROUTES FOR ROUNDS CRUD OPS //
-///////////////////////////////////////////
+/////////////////////////////////////
+//EXPRESS APP ROUTES FOR USER Docs //
+/////////////////////////////////////
 
-//ADDROUND route (POST): Given a JSON object containing data for a new round, add the
-//round to the database
-app.post('/addround', async (req, res, next) => {
-  console.log("in /addround route with body = " + JSON.stringify(req.body));
-  if (!req.body.hasOwnProperty("userId") ||
-      !req.body.hasOwnProperty("date") || 
+//USERS/userId route (GET): Attempts to return the data of a user 
+//in users collection.
+//GIVEN: 
+//  id of the user is passed as route parameter.
+//  Fields and values to be updated are passed as body as JSON object 
+//RETURNS: 
+//  Success: status = 200 with user data as JSON object
+//  Failure: status = 400 with error message
+app.get('/users/:userId', async(req, res, next) => {
+  console.log("in /users route (GET) with userId = " + JSON.stringify(req.params.userId));
+  try {
+    let thisUser = await User.findOne({id: req.params.userId});
+    if (!thisUser) {
+      return res.status(400).message("No user account with specified userId was found in database.");
+    } else {
+      return res.status(200).json(JSON.stringify(thisUser));
+    }
+  } catch (err) {
+    console.log()
+    return res.status(400).message("Unexpected error occurred when looking up user in database: " + err);
+  }
+});
+
+
+//USERS/userId route (POST): Attempts to add a new user in the users 
+//collection. 
+//GIVEN: 
+//  id of the user to add is passed as route parameter.
+//  user data to be added are passed as body as JSON object.
+//VALID DATA:
+//  'password' field MUST be present
+//  The following fields are optional: 
+//  displayName', 'profileImageUrl', 'securityQuestion', 'securityAnswer'
+//RETURNS: 
+//  Success: status = 200
+//  Failure: status = 400 with an error message
+
+app.post('/users/:userId',  async (req, res, next) => {
+  console.log("in /users route (POST) with params = " + JSON.stringify(req.params) +
+    " and body = " + JSON.stringify(req.body));  
+  if (!req.body.hasOwnProperty("password")) {
+    //Body does not contain correct properties
+    return res.status(400).send("/users POST request formulated incorrectly. " + 
+      "It must contain 'password' as field in message body.")
+  }
+  try {
+    let thisUser = await User.findOne({id: req.params.userId});
+    console.log("thisUser: " + JSON.stringify(thisUser));
+    if (thisUser) { //account already exists
+      res.status(400).send("There is already an account with email '" + req.params.userId + "'.  Please choose a different email.");
+    } else { //account available -- add to database
+      thisUser = await new User({
+        id: req.params.userId,
+        password: req.body.password,
+        displayName: req.params.userId,
+        authStrategy: 'local',
+        profileImageUrl: req.body.hasOwnProperty("profileImageUrl") ? 
+          req.body.profileImageUrl : 
+          `https://www.gravatar.com/avatar/${md5(req.params.userId)}`,
+        securityQuestion: req.body.hasOwnProperty("securityQuestion") ? 
+          req.body.securityQuestion : "",
+        securityAnswer: req.body.hasOwnProperty("securityAnswer") ? 
+          req.body.securityAnswer : "",
+        rounds: []
+      }).save();
+      return res.status(200).send("New account for '" + req.params.userId + "' successfully created.");
+    }
+  } catch (err) {
+    console.log(err);
+    return res.status(400).send("Unexpected error occurred when adding or looking up user in database. " + err);
+   
+  }
+});
+
+//USERS/userId route (PUT): Attempts to update a user in the users collection. 
+//GIVEN: 
+//  id of the user to update is passed as route parameter.
+//  Fields and values to be updated are passed as body as JSON object.  
+//VALID DATA:
+//  Only the following fields may be included in the message body:
+//  password, displayName, profileImageUrl, securityQuestion, securityAnswer
+//RETURNS: 
+//  Success: status = 200
+//  Failure: status = 400 with an error message
+app.put('/users/:userId',  async (req, res, next) => {
+  console.log("in /users PUT with userId = " + JSON.stringify(req.params) + 
+    " and body = " + JSON.stringify(req.body));
+  if (!req.params.hasOwnProperty("userId"))  {
+    return res.status(400).send("users/ PUT request formulated incorrectly." +
+        "It must contain 'userId' as parameter.");
+  }
+  const validProps = ['password', 'displayname', 'profileImageUrl', 'securityQuestion', 'securityAnswer'];
+  for (const bodyProp in req.body) {
+    if (!validProps.includes(bodyProp)) {
+      return res.status(400).send("users/ PUT request formulated incorrectly." +
+        "Only the following props are allowed in body: " +
+        "'password', 'displayname', 'profileImageUrl', 'securityQuestion', 'securityAnswer'");
+    } 
+  }
+  try {
+        let status = await User.updateOne({id: req.params.userId}, 
+                                          {$set: req.body});                            
+        if (status.nModified != 1) { //Should never happen!
+          res.status(400).send("User account exists in database but data could not be updated.");
+        } else {
+          res.status(200).send("User data successfully updated.")
+        }
+      } catch (err) {
+        res.status(400).send("Unexpected error occurred when updating user data in database: " + err);
+      }
+});
+
+///////////////////////////////////////
+//EXPRESS APP ROUTES FOR ROUNDS Docs //
+///////////////////////////////////////
+
+//rounds/userId route (GET): Attempts to return all rounds associated with userId
+//GIVEN: 
+//  id of the user whose rounds are sought is passed as route parameter.
+//RETURNS: 
+//  Success: status = 200 with array of rounds as JSON object
+//  Failure: status = 400 with error message
+app.get('/rounds/:userId', async(req, res) => {
+  console.log("in /rounds route (GET) with userId = " + JSON.stringify(req.params.userId));
+  try {
+    let thisUser = await User.findOne({id: req.params.userId});
+    if (!thisUser) {
+      return res.status(400).message("No user account with specified userId was found in database.");
+    } else {
+      return res.status(200).json(JSON.stringify(thisUser.rounds));
+    }
+  } catch (err) {
+    console.log()
+    return res.status(400).message("Unexpected error occurred when looking up user in database: " + err);
+  }
+});
+
+
+//rounds/userId/ (POST): Attempts to add new round to database
+//GIVEN:
+//  id of the user whose round is to be added is passed as 
+//  route parameter
+//  JSON object containing round to be added is passed in request body
+//VALID DATA:
+//  user id must correspond to user in Users collection
+//  Body object MUST contain only the following fields:
+//  date, course, type, holes, strokes, minutes, seconds, notes
+//RETURNS:
+//  Success: status = 200
+//  Failure: status = 400 with error message
+app.post('/rounds/:userId', async (req, res, next) => {
+  console.log("in /rounds (POST) route with params = " + 
+              JSON.stringify(req.params) + " and body = " + 
+              JSON.stringify(req.body));
+  if (!req.body.hasOwnProperty("date") || 
       !req.body.hasOwnProperty("course") || 
       !req.body.hasOwnProperty("type") ||
       !req.body.hasOwnProperty("holes") || 
@@ -384,25 +491,102 @@ app.post('/addround', async (req, res, next) => {
       !req.body.hasOwnProperty("seconds") || 
       !req.body.hasOwnProperty("notes")) {
     //Body does not contain correct properties
-    return res.status(401).send("POST request for /addround formulated incorrectly." +
-      "Its body must contain userId + all 9 required fields.")
+    return res.status(400).send("POST request on /rounds formulated incorrectly." +
+      "Body must contain all 8 required fields: date, course, type, holes, strokes, " +
+      "minutes, seconds, notes.");
   }
-  let newRound = {...req.body};
-  delete newRound.userId; //userId not part of round schema
   try {
-    console.log(" in addround/ with userId = '" + req.body.userId + "' and new round = " 
-      + JSON.stringify(newRound));
-    let status = await User.updateOne(
-    {id: req.body.userId},
-    {$push: {rounds: newRound}});
+    let status = await User.update(
+    {id: req.params.userId},
+    {$push: {rounds: req.body}});
     if (status.nModified != 1) { //Should never happen!
-      res.status(401).send("Unexpected error occurred when adding round to database. Round was not added.");
+      res.status(400).send("Unexpected error occurred when adding round to database. Round was not added.");
     } else {
-      res.status(200).send("Round successfully added to User document.");
+      res.status(200).send("Round successfully added to database.");
     }
   } catch (err) {
     console.log(err);
-    return res.status(401).send("Unexpected error occurred when adding round to database. Round was not added.");
+    return res.status(400).send("Unexpected error occurred when adding round to database: " + err);
   } 
 });
 
+//rounds/userId/roundId (PUT): Attempts to update data for an existing round
+//GIVEN:
+//  id of the user whose round is to be updated is passed as first 
+//  route parameter
+//  id of round to be updated is passed as second route parameter
+//  JSON object containing data to be updated is passed in request body
+//VALID DATA:
+//  user id must correspond to user in Users collection
+//  round id must correspond to a user's round. (Use rounds/ GET route to obtain a
+//  list of all of user's rounds, including their unique ids)
+//  Body object may contain only the following 9 fields:
+//  date, course, type, holes, strokes, minutes, seconds, notes
+//RETURNS:
+//  Success: status = 200
+//  Failure: status = 400 with error message
+app.put('/rounds/:userId/:roundId', async (req, res, next) => {
+  console.log("in /rounds (PUT) route with params = " + 
+              JSON.stringify(req.params) + " and body = " + 
+              JSON.stringify(req.body));
+  const validProps = ['date', 'course', 'type', 'holes', 'strokes',
+    'minutes', 'seconds', 'notes'];
+  let bodyObj = {...req.body};
+  for (const bodyProp in bodyObj) {
+    if (!validProps.includes(bodyProp)) {
+      return res.status(400).send("rounds/ PUT request formulated incorrectly." +
+        "Only the following props are allowed in body: " +
+        "'date', 'course', 'type', 'holes', 'strokes'" +
+        "'minutes', 'seconds', 'notes'");
+    } else {
+      bodyObj["rounds.$." + bodyProp] = bodyObj[bodyProp];
+      delete bodyObj[bodyProp];
+    }
+  }
+  try {
+    let status = await User.updateOne(
+      {"id": req.params.userId,
+       "rounds._id": mongoose.Types.ObjectId(req.params.roundId)}
+      ,{"$set" : bodyObj}
+    );
+    if (status.nModified != 1) { //Should never happen!
+      res.status(400).send("Unexpected error occurred when updating round in database. Round was not updated.");
+    } else {
+      res.status(200).send("Round successfully updated in database.");
+    }
+  } catch (err) {
+    console.log(err);
+    return res.status(400).send("Unexpected error occurred when updating round in database: " + err);
+  } 
+});
+
+//rounds/userId/roundId (DELETE): Attempts to delete an existing round
+//GIVEN:
+//  id of the user whose round is to be deleted is passed as first 
+//  route parameter
+//  id of round to be deleted is passed as second route parameter
+//VALID DATA:
+//  user id must correspond to user in Users collection
+//  round id must correspond to a unique id of a user's round. 
+//  (Use rounds/ GET route to obtain a list of all of user's 
+//  rounds, including their unique ids)
+//RETURNS:
+//  Success: status = 200
+//  Failure: status = 400 with error message
+app.delete('/rounds/:userId/:roundId', async (req, res, next) => {
+  console.log("in /rounds (DELETE) route with params = " + 
+              JSON.stringify(req.params)); 
+  try {
+    let status = await User.updateOne(
+      {id: req.params.userId},
+      {$pull: {rounds: {_id: mongoose.Types.ObjectId(req.params.roundId)}}});
+    if (status.nModified != 1) { //Should never happen!
+      res.status(400).send("Unexpected error occurred when deleting round from database. Round was not deleted.");
+    } else {
+      res.status(200).send("Round successfully deleted from database.");
+    }
+  } catch (err) {
+    console.log(err);
+    return res.status(400).send("Unexpected error occurred when deleting round from database: " + err);
+  } 
+});

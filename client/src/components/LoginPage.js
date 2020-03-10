@@ -68,7 +68,7 @@ handleLoginSubmit = async (event) => {
     event.preventDefault();
     this.setState({loginBtnIcon: "fa fa-spin fa-spinner",
                    loginBtnLabel: "Logging In..."});
-    const url = "/login?username=" + this.emailInputRef.current.value +
+    const url = "/auth/login?username=" + this.emailInputRef.current.value +
                 "&password=" + this.passwordInputRef.current.value;
     const res = await fetch(url, {method: 'POST'}); 
     if (res.status == 200) { //successful login!
@@ -145,11 +145,11 @@ handleNewAccountChange = (event) => {
 //new object for user, save to localStorage and take user to app's landing page. 
 handleCreateAccount = async (event) => {
     event.preventDefault();
-    const loginInfo = {userId: this.state.accountName,
-                       password: this.state.accountPassword,
+    const url = '/user/' + this.state.accountName;
+    const loginInfo = {password: this.state.accountPassword,
                        securityQuestion: this.state.accountSecurityQuestion,
                        securityAnswer: this.state.accountSecurityAnswer};
-    const res = await fetch('/newaccount', {
+    const res = await fetch(url, {
         headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -297,31 +297,21 @@ handleLoginChange = (event) => {
 //and showing the security question dialog box.
 handleLookUpAccount = async (event) => {
     event.preventDefault();
-    let url = "/accountexists?userId=" + this.accountEmailRef.current.value;
+    let url = "/users/" + this.accountEmailRef.current.value;
     let res = await fetch(url, {method: 'GET'});
     let body;
     if (res.status != 200) {
-        alert("Sorry, there was a problem communicating with the server. Please try again.");
+        alert("Sorry, there is no account associated with that email address.");
         this.accountEmailRef.current.focus();
         return;
     } 
     body = await res.json();
-    if (!body.result) {
-        alert("Sorry, there is no account associated with this email address.");
-        this.accountEmailRef.current.select();
-        return;
-    } 
-    //if here, account exists -- grab security question
-    url = "/securityquestion?userId=" + this.accountEmailRef.current.value;
-    res = await fetch(url, {method: 'GET'});
-    if (res.status != 200) {
-        alert("Sorry, there was a problem communicating with the server. Please try again.");
-        this.accountEmailRef.current.focus();
-        return;
-    } 
-    let question = await res.text();
+    body = JSON.parse(body);
+    alert("Body: " + body);
+    //if here, account exists -- user account info and push to state vars
     this.setState({resetEmail: this.accountEmailRef.current.value, 
-                   resetQuestion: question,
+                   resetQuestion:  body.securityQuestion,
+                   resetAnswer: body.securityAnswer,
                    showLookUpAccountDialog: false, 
                    showSecurityQuestionDialog: true});
     this.emailInputRef.current.value = ""; //clear out field
@@ -371,23 +361,14 @@ renderLookUpAccountDialog = () => {
 //present dialog box for resetting the password. 
 handleSecurityQuestionResponse = async(event) => {
     event.preventDefault();
-    let url = "verifysecurityanswer/?userId=" + this.state.resetEmail + 
-      "&answer=" + this.securityAnswerRef.current.value;
-    let res = await fetch(url, {method: 'GET'});
-    if (res.status != 200) {
-        alert("There was a problem communicating with the server. Try again.");
-        return;
-    } 
-    let body = await res.json();
-    if (!body.result) {
-        alert("Sorry, that is not the correct answer to the security question.");
+    if (this.securityAnswerRef.current.value != this.state.resetAnswer) {
+            alert("Sorry, that is not the correct answer to the security question.");
         this.securityAnswerRef.current.select();
         return;
     } 
-    this.setState({resetAnswer: this.securityAnswerRef.current.value,
-                   showSecurityQuestionDialog: false, 
+    this.setState({showSecurityQuestionDialog: false, 
                    showPasswordResetDialog: true});
-     this.securityAnswerRef.current.value = ""; //clear out field
+    this.securityAnswerRef.current.value = ""; //clear out field
 }
 
 //renderSecurityQuestionDialog -- Present a dialog box for user to enter answer
@@ -450,15 +431,14 @@ handleResetPassword = async(event) => {
         this.resetPasswordRepeatRef.current.select();
         return;
     }
-    const resetInfo = {userId: this.state.resetEmail,
-                        answer: this.state.resetAnswer,
-                        newPassword: this.resetPasswordRef.current.value};
-    const res = await fetch('/resetpassword', {
+    const url = '/users/' + this.state.resetEmail;
+    const resetInfo = {password: this.resetPasswordRef.current.value};
+    const res = await fetch(url, {
         headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
         },
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify(resetInfo)}); 
     const text = await res.text();
     alert(text);   
